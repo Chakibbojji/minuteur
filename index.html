@@ -22,7 +22,7 @@
 /* Layout : une colonne plein écran — barre d'état, champ de phase (remplit), bande "ensuite", pupitre de commande */
 :root{
   --ground:#14161b; --deck:#1d2027; --line:#2b2f38; --ink:#f3f1ec; --muted:#8a90a0;
-  --prep:#f2c14e; --work:#ff6a3c; --rest:#3d7cff; --cycle:#9a7bff; --done:#4fbf86;
+  --prep:#f2c14e; --work:#ff6a3c; --rest:#3d7cff; --cycle:#9a7bff; --done:#4fbf86; --warm:#2fb5a0;
   --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   color-scheme:dark;
@@ -51,8 +51,10 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
 .app[data-phase="work"]{--phase-bg:var(--work);--phase-fg:#1a0d08}
 .app[data-phase="rest"]{--phase-bg:var(--rest);--phase-fg:#f6f8ff}
 .app[data-phase="cycle"]{--phase-bg:var(--cycle);--phase-fg:#f7f4ff}
+.app[data-phase="warm"]{--phase-bg:var(--warm);--phase-fg:#061f1b}
 .app[data-phase="done"]{--phase-bg:var(--done);--phase-fg:#08170f}
 .label{font-family:var(--display);font-weight:900;text-transform:uppercase;letter-spacing:.02em;font-size:min(16vw,11vh);line-height:.9}
+.label.long{font-size:min(12.5vw,9vh)}
 .count{font-family:var(--display);font-weight:900;font-variant-numeric:tabular-nums;line-height:.82;font-size:min(42vw,27vh);letter-spacing:-.01em}
 .count.long{font-size:min(28vw,20vh)}
 .where{font-weight:700;font-size:15px;letter-spacing:.12em;text-transform:uppercase;opacity:.75;min-height:1.2em}
@@ -178,6 +180,7 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
 <script>
 (function(){
 const FIELDS=[
+  {k:'warm',label:'Échauffement',hint:'Marche, vélo… avant la séance',type:'t',min:0,max:5400,color:'--warm'},
   {k:'prep',label:'Préparation',hint:'Avant le premier round',type:'t',min:0,max:300,color:'--prep'},
   {k:'work',label:'Exercice',hint:'Durée d’un round',type:'t',min:5,max:3600,color:'--work'},
   {k:'rest',label:'Repos',hint:'Entre deux rounds',type:'t',min:0,max:3600,color:'--rest'},
@@ -186,12 +189,12 @@ const FIELDS=[
   {k:'cycleRest',label:'Pause entre cycles',hint:'Remplace le repos en fin de bloc',type:'t',min:0,max:3600,color:'--cycle'}
 ];
 const PRESETS=[
-  {id:'tabata',name:'Tabata',prep:10,work:20,rest:10,rounds:8,cycles:1,cycleRest:60},
-  {id:'pompes',name:'Pompes 7 séries',prep:10,work:30,rest:60,rounds:7,cycles:1,cycleRest:0},
-  {id:'hiit',name:'HIIT 40/20',prep:10,work:40,rest:20,rounds:6,cycles:3,cycleRest:60},
-  {id:'emom',name:'EMOM 10 min',prep:10,work:60,rest:0,rounds:10,cycles:1,cycleRest:0}
+  {id:'tabata',name:'Tabata',warm:0,prep:10,work:20,rest:10,rounds:8,cycles:1,cycleRest:60},
+  {id:'pompes',name:'Pompes 7 séries',warm:0,prep:10,work:30,rest:60,rounds:7,cycles:1,cycleRest:0},
+  {id:'hiit',name:'HIIT 40/20',warm:0,prep:10,work:40,rest:20,rounds:6,cycles:3,cycleRest:60},
+  {id:'emom',name:'EMOM 10 min',warm:0,prep:10,work:60,rest:0,rounds:10,cycles:1,cycleRest:0}
 ];
-const NAMES={idle:'Prêt',prep:'Préparer',work:'Exercice',rest:'Repos',cycle:'Pause cycle',done:'Terminé'};
+const NAMES={idle:'Prêt',warm:'Échauffement',prep:'Préparer',work:'Exercice',rest:'Repos',cycle:'Pause cycle',done:'Terminé'};
 const KEY='minuteur-series-v1';
 const $=id=>document.getElementById(id);
 
@@ -202,6 +205,7 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify({cfg,sound,tictac}))
 /* ---------- séquence ---------- */
 function build(s){
   const seg=[];
+  if(s.warm>0)seg.push({type:'warm',d:s.warm,r:0,c:1});
   if(s.prep>0)seg.push({type:'prep',d:s.prep,r:0,c:1});
   for(let c=1;c<=s.cycles;c++)for(let r=1;r<=s.rounds;r++){
     seg.push({type:'work',d:s.work,r,c});
@@ -308,14 +312,14 @@ function render(rem){
   const phase=st.done?'done':(st.started?cur.type:'idle');
   app.dataset.phase=phase;
   app.classList.toggle('paused',st.started&&!st.running&&!st.done);
-  $('label').textContent=st.started||st.done?NAMES[phase]:NAMES[cur.type];
+  const lab=st.started||st.done?NAMES[phase]:NAMES[cur.type];$('label').textContent=lab;$('label').classList.toggle('long',lab.length>9);
   const big=fmt(rem/1000,true);$('count').textContent=big;$('count').classList.toggle('long',big.length>5);
   $('bar').style.width=(st.done?0:Math.max(0,Math.min(1,rem/(cur.d*1000)))*100)+'%';
 
   // restants
   let rl,cl;
   if(st.done){rl=0;cl=0}
-  else if(cur.type==='prep'){rl=cfg.rounds;cl=cfg.cycles}
+  else if(cur.type==='prep'||cur.type==='warm'){rl=cfg.rounds;cl=cfg.cycles}
   else if(cur.type==='work'){rl=cfg.rounds-cur.r+1;cl=cfg.cycles-cur.c+1}
   else if(cur.type==='rest'){rl=cfg.rounds-cur.r;cl=cfg.cycles-cur.c+1}
   else{rl=cfg.rounds;cl=cfg.cycles-cur.c}
@@ -340,7 +344,7 @@ function render(rem){
 /* ---------- réglages ---------- */
 function stepFor(v,dir){ // pas adapté à la valeur
   const base=dir>0?v:v-1;
-  return base<60?5:base<300?15:30;
+  return base<60?5:base<300?15:base<600?30:60;
 }
 function buildRows(){
   $('rows').innerHTML=FIELDS.map(f=>`
@@ -372,7 +376,7 @@ $('rows').addEventListener('pointerdown',e=>{
 $('rows').addEventListener('click',e=>{const b=e.target.closest('button[data-k]');if(b&&e.detail===0)bump(b.dataset.k,+b.dataset.d)});
 $('presets').addEventListener('click',e=>{
   const c=e.target.closest('.chip');if(!c)return;
-  cfg=Object.assign({},PRESETS.find(p=>p.id===c.dataset.p));changed=true;syncSheet();
+  const w=cfg.warm||0;cfg=Object.assign({},PRESETS.find(p=>p.id===c.dataset.p),{warm:w});changed=true;syncSheet();
 });
 $('sound').addEventListener('change',e=>{sound=e.target.checked;save();if(sound){audio();tone(784,.12)}});
 $('tictac').addEventListener('change',e=>{tictac=e.target.checked;save();if(tictac){audio();tick(true);setTimeout(()=>tick(false),500)}});
