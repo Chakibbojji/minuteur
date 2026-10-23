@@ -22,7 +22,7 @@
 /* Layout : une colonne plein écran — barre d'état, champ de phase (remplit), bande "ensuite", pupitre de commande */
 :root{
   --ground:#14161b; --deck:#1d2027; --line:#2b2f38; --ink:#f3f1ec; --muted:#8a90a0;
-  --prep:#f2c14e; --work:#ff6a3c; --rest:#3d7cff; --cycle:#9a7bff; --done:#4fbf86; --warm:#2fb5a0;
+  --prep:#f2c14e; --work:#ff6a3c; --rest:#3d7cff; --cycle:#9a7bff; --done:#4fbf86; --warm:#2fb5a0; --cool:#d8a7c7;
   --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
   color-scheme:dark;
@@ -52,9 +52,11 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
 .app[data-phase="rest"]{--phase-bg:var(--rest);--phase-fg:#f6f8ff}
 .app[data-phase="cycle"]{--phase-bg:var(--cycle);--phase-fg:#f7f4ff}
 .app[data-phase="warm"]{--phase-bg:var(--warm);--phase-fg:#061f1b}
+.app[data-phase="cool"]{--phase-bg:var(--cool);--phase-fg:#2a0f20}
 .app[data-phase="done"]{--phase-bg:var(--done);--phase-fg:#08170f}
 .label{font-family:var(--display);font-weight:900;text-transform:uppercase;letter-spacing:.02em;font-size:min(16vw,11vh);line-height:.9}
 .label.long{font-size:min(12.5vw,9vh)}
+.label.xlong{font-size:min(10vw,7.5vh);text-align:center;padding-inline:8px}
 .count{font-family:var(--display);font-weight:900;font-variant-numeric:tabular-nums;line-height:.82;font-size:min(42vw,27vh);letter-spacing:-.01em}
 .count.long{font-size:min(28vw,20vh)}
 .where{font-weight:700;font-size:15px;letter-spacing:.12em;text-transform:uppercase;opacity:.75;min-height:1.2em}
@@ -94,6 +96,19 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
 .presets{display:flex;flex-wrap:wrap;gap:8px}
 .chip{padding:9px 14px;border-radius:999px;border:1px solid var(--line);font-weight:600;font-size:15px}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+.chip.mine{border-color:var(--warm)}
+.empty{font-size:14px;color:var(--muted);line-height:1.45;margin:0}
+.field-in{display:flex;flex-direction:column;gap:6px;padding-block:12px;border-bottom:1px solid var(--line)}
+.field-in label{font-size:17px;font-weight:700}
+.txt{width:100%;box-sizing:border-box;font:600 17px var(--body);color:var(--ink);background:var(--deck);border:1px solid var(--line);border-radius:12px;padding:12px 14px;-webkit-user-select:text;user-select:text}
+.txt::placeholder{color:var(--muted);font-weight:500}
+.txt:focus{outline:2px solid var(--warm);outline-offset:1px}
+.save{display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:14px;border:1px solid var(--line)}
+.save-row{display:flex;gap:8px;flex-wrap:wrap}
+.save-row .txt{flex:1 1 180px;min-width:0}
+.btn{font-weight:700;padding:12px 18px;border-radius:12px;background:var(--ink);color:var(--ground);flex:none}
+.btn.ghost{background:none;color:var(--muted);border:1px solid var(--line);padding:9px 14px;font-size:14px;align-self:flex-start}
+.btn.ghost.danger{color:#ff8a8a;border-color:#ff8a8a}
 .rows{display:flex;flex-direction:column;border-top:1px solid var(--line)}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px;border-bottom:1px solid var(--line)}
 .row .l{min-width:0}
@@ -164,14 +179,25 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
   <div class="sheet-in">
     <div class="sheet-head"><h2>Réglages</h2><button class="ok" id="closeSettings">OK</button></div>
     <div>
+      <div class="group-t">Mes séances</div>
+      <div class="presets" id="saved"></div>
+      <p class="empty" id="savedEmpty">Aucune séance enregistrée. Règle tes phases ci-dessous, puis enregistre-les en bas de la page.</p>
+    </div>
+    <div>
       <div class="group-t">Séances types</div>
       <div class="presets" id="presets"></div>
     </div>
     <div>
       <div class="group-t">Personnaliser</div>
+      <div class="field-in"><label for="exo">Exercice</label><input class="txt" id="exo" type="text" maxlength="24" placeholder="Pompes, squats, gainage…" autocomplete="off" autocapitalize="sentences"></div>
       <div class="rows" id="rows"></div>
     </div>
     <div class="summary"><span>Durée totale</span><b id="sumTotal">0:00</b></div>
+    <div class="save">
+      <div class="group-t" style="margin:0">Enregistrer cette séance</div>
+      <div class="save-row"><input class="txt" id="saveName" type="text" maxlength="30" placeholder="Ex. Marche + gainage" autocomplete="off" autocapitalize="sentences" aria-label="Nom de la séance"><button class="btn" id="saveBtn">Enregistrer</button></div>
+      <button class="btn ghost" id="delBtn" hidden>Supprimer cette séance</button>
+    </div>
     <label class="toggle"><div><b>Signaux sonores</b><span>3 bips avant chaque changement. Le mode silencieux de l'iPhone les coupe.</span></div><input type="checkbox" class="switch" id="sound" checked></label>
     <label class="toggle"><div><b>Tic-tac pendant l'exercice</b><span>Un tic à chaque seconde pour garder le rythme.</span></div><input type="checkbox" class="switch" id="tictac" checked></label>
   </div>
@@ -186,15 +212,16 @@ const FIELDS=[
   {k:'rest',label:'Repos',hint:'Entre deux rounds',type:'t',min:0,max:3600,color:'--rest'},
   {k:'rounds',label:'Rounds',hint:'Par cycle',type:'n',min:1,max:99},
   {k:'cycles',label:'Cycles',hint:'Nombre de blocs',type:'n',min:1,max:20},
-  {k:'cycleRest',label:'Pause entre cycles',hint:'Remplace le repos en fin de bloc',type:'t',min:0,max:3600,color:'--cycle'}
+  {k:'cycleRest',label:'Pause entre cycles',hint:'Remplace le repos en fin de bloc',type:'t',min:0,max:3600,color:'--cycle'},
+  {k:'cool',label:'Retour au calme',hint:'Étirements, marche lente… après la séance',type:'t',min:0,max:5400,color:'--cool'}
 ];
 const PRESETS=[
-  {id:'tabata',name:'Tabata',warm:0,prep:10,work:20,rest:10,rounds:8,cycles:1,cycleRest:60},
-  {id:'pompes',name:'Pompes 7 séries',warm:0,prep:10,work:30,rest:60,rounds:7,cycles:1,cycleRest:0},
-  {id:'hiit',name:'HIIT 40/20',warm:0,prep:10,work:40,rest:20,rounds:6,cycles:3,cycleRest:60},
-  {id:'emom',name:'EMOM 10 min',warm:0,prep:10,work:60,rest:0,rounds:10,cycles:1,cycleRest:0}
+  {id:'tabata',name:'Tabata',exo:'',cool:0,warm:0,prep:10,work:20,rest:10,rounds:8,cycles:1,cycleRest:60},
+  {id:'pompes',name:'Pompes 7 séries',exo:'Pompes',cool:0,warm:0,prep:10,work:30,rest:60,rounds:7,cycles:1,cycleRest:0},
+  {id:'hiit',name:'HIIT 40/20',exo:'',cool:0,warm:0,prep:10,work:40,rest:20,rounds:6,cycles:3,cycleRest:60},
+  {id:'emom',name:'EMOM 10 min',exo:'',cool:0,warm:0,prep:10,work:60,rest:0,rounds:10,cycles:1,cycleRest:0}
 ];
-const NAMES={idle:'Prêt',warm:'Échauffement',prep:'Préparer',work:'Exercice',rest:'Repos',cycle:'Pause cycle',done:'Terminé'};
+const NAMES={idle:'Prêt',warm:'Échauffement',cool:'Retour au calme',prep:'Préparer',work:'Exercice',rest:'Repos',cycle:'Pause cycle',done:'Terminé'};
 const KEY='minuteur-series-v1';
 const $=id=>document.getElementById(id);
 
@@ -214,6 +241,7 @@ function build(s){
     if(lastR){if(s.cycleRest>0)seg.push({type:'cycle',d:s.cycleRest,r,c})}
     else if(s.rest>0)seg.push({type:'rest',d:s.rest,r,c});
   }
+  if(s.cool>0)seg.push({type:'cool',d:s.cool,r:s.rounds,c:s.cycles});
   return seg;
 }
 let seg=build(cfg);
@@ -312,13 +340,14 @@ function render(rem){
   const phase=st.done?'done':(st.started?cur.type:'idle');
   app.dataset.phase=phase;
   app.classList.toggle('paused',st.started&&!st.running&&!st.done);
-  const lab=st.started||st.done?NAMES[phase]:NAMES[cur.type];$('label').textContent=lab;$('label').classList.toggle('long',lab.length>9);
+  const lab=st.started||st.done?nameOf(phase):nameOf(cur.type);$('label').textContent=lab;$('label').classList.toggle('long',lab.length>9&&lab.length<=12);$('label').classList.toggle('xlong',lab.length>12);
   const big=fmt(rem/1000,true);$('count').textContent=big;$('count').classList.toggle('long',big.length>5);
   $('bar').style.width=(st.done?0:Math.max(0,Math.min(1,rem/(cur.d*1000)))*100)+'%';
 
   // restants
   let rl,cl;
   if(st.done){rl=0;cl=0}
+  else if(cur.type==='cool'){rl=0;cl=0}
   else if(cur.type==='prep'||cur.type==='warm'){rl=cfg.rounds;cl=cfg.cycles}
   else if(cur.type==='work'){rl=cfg.rounds-cur.r+1;cl=cfg.cycles-cur.c+1}
   else if(cur.type==='rest'){rl=cfg.rounds-cur.r;cl=cfg.cycles-cur.c+1}
@@ -332,12 +361,12 @@ function render(rem){
 
   // ensuite
   const nx=st.done?null:seg[st.idx+1];
-  $('next').textContent=nx?NAMES[nx.type]+' · '+fmt(nx.d):(st.done?'Séance terminée':'Fin de séance');
+  $('next').textContent=nx?nameOf(nx.type)+' · '+fmt(nx.d):(st.done?'Séance terminée':'Fin de séance');
   $('nextDot').style.background=nx?'var(--'+(nx.type==='cycle'?'cycle':nx.type)+')':'var(--done)';
   $('skip').disabled=!st.started||st.done;
 
   // bouton
-  $('icoPlay').hidden=st.running||st.done;$('icoPause').hidden=!st.running;$('icoAgain').hidden=!st.done;
+  $('icoPlay').toggleAttribute('hidden',st.running||st.done);$('icoPause').toggleAttribute('hidden',!st.running);$('icoAgain').toggleAttribute('hidden',!st.done);
   $('play').setAttribute('aria-label',st.running?'Pause':st.done?'Relancer la séance':st.started?'Reprendre':'Démarrer');
 }
 
@@ -346,6 +375,42 @@ function stepFor(v,dir){ // pas adapté à la valeur
   const base=dir>0?v:v-1;
   return base<60?5:base<300?15:base<600?30:60;
 }
+/* ---------- mes séances ---------- */
+const DEF={warm:0,prep:10,work:30,rest:30,rounds:5,cycles:1,cycleRest:0,cool:0,exo:''};
+const MKEY='minuteur-seances-v1';
+let mine=[];
+try{mine=JSON.parse(localStorage.getItem(MKEY)||'[]')||[]}catch(e){mine=[]}
+cfg=Object.assign({},DEF,cfg);seg=build(cfg);
+function saveMine(){try{localStorage.setItem(MKEY,JSON.stringify(mine))}catch(e){}}
+const isMine=()=>String(cfg.id||'').startsWith('u-')&&mine.some(x=>x.id===cfg.id);
+function nameOf(t){return t==='work'&&cfg.exo?cfg.exo:NAMES[t]}
+function touched(){ // une séance perso garde son nom ; un modèle devient "Personnalisé"
+  if(!isMine()){cfg.id='perso';cfg.name='Personnalisé'}
+  changed=true;
+}
+function fillName(){$('saveName').value=isMine()?cfg.name:''}
+function renderMine(){
+  const box=$('saved');box.textContent='';
+  mine.forEach(m=>{const b=document.createElement('button');b.className='chip mine';b.dataset.p=m.id;b.textContent=m.name;b.setAttribute('aria-pressed','false');box.appendChild(b)});
+  $('savedEmpty').hidden=mine.length>0;box.hidden=mine.length===0;
+}
+$('exo').addEventListener('input',e=>{cfg.exo=e.target.value.trim();touched();$('modeName').textContent=cfg.name;$('delBtn').hidden=!isMine()});
+$('saveBtn').addEventListener('click',()=>{
+  const name=($('saveName').value.trim()||cfg.exo||'Ma séance').slice(0,30);
+  const data={};Object.keys(DEF).forEach(k=>data[k]=cfg[k]);
+  let m=mine.find(x=>x.name.toLowerCase()===name.toLowerCase());
+  if(m)Object.assign(m,data,{name});else{m=Object.assign({id:'u-'+Date.now()},data,{name});mine.push(m)}
+  cfg.id=m.id;cfg.name=name;saveMine();save();renderMine();fillName();syncSheet();
+  const b=$('saveBtn');b.textContent='Enregistrée ✓';setTimeout(()=>{b.textContent='Enregistrer'},1600);
+});
+let delArm=null;
+$('delBtn').addEventListener('click',()=>{
+  const b=$('delBtn');
+  if(!b.classList.contains('danger')){b.classList.add('danger');b.textContent='Toucher encore pour supprimer';clearTimeout(delArm);delArm=setTimeout(()=>{b.classList.remove('danger');b.textContent='Supprimer cette séance'},3000);return}
+  clearTimeout(delArm);b.classList.remove('danger');b.textContent='Supprimer cette séance';
+  mine=mine.filter(x=>x.id!==cfg.id);saveMine();cfg.id='perso';cfg.name='Personnalisé';save();renderMine();fillName();syncSheet();
+});
+
 function buildRows(){
   $('rows').innerHTML=FIELDS.map(f=>`
     <div class="row"><div class="l"><b>${f.color?`<span class="dot" style="background:var(${f.color})"></span>`:''}${f.label}</b><span>${f.hint}</span></div>
@@ -353,6 +418,8 @@ function buildRows(){
   $('presets').innerHTML=PRESETS.map(p=>`<button class="chip" data-p="${p.id}" aria-pressed="false">${p.name}</button>`).join('');
 }
 function syncSheet(){
+  $('exo').value=cfg.exo||'';
+  $('delBtn').hidden=!isMine();
   FIELDS.forEach(f=>{$('v-'+f.k).textContent=f.type==='t'?fmt(cfg[f.k]):cfg[f.k]});
   document.querySelectorAll('.chip').forEach(c=>c.setAttribute('aria-pressed',String(c.dataset.p===cfg.id)));
   $('sumTotal').textContent=fmt(totalOf(build(cfg)));
@@ -363,7 +430,7 @@ function bump(k,dir){
   const f=FIELDS.find(x=>x.k===k);let v=cfg[k];
   v+=f.type==='t'?dir*stepFor(v,dir):dir;
   cfg[k]=Math.max(f.min,Math.min(f.max,v));
-  cfg.id='perso';cfg.name='Personnalisé';changed=true;syncSheet();
+  touched();syncSheet();
 }
 let changed=false,holdT=null,holdI=null;
 function stopHold(){clearTimeout(holdT);clearInterval(holdI)}
@@ -374,13 +441,17 @@ $('rows').addEventListener('pointerdown',e=>{
 });
 ['pointerup','pointercancel','pointerleave'].forEach(t=>$('rows').addEventListener(t,stopHold));
 $('rows').addEventListener('click',e=>{const b=e.target.closest('button[data-k]');if(b&&e.detail===0)bump(b.dataset.k,+b.dataset.d)});
-$('presets').addEventListener('click',e=>{
+function pickChip(e){
   const c=e.target.closest('.chip');if(!c)return;
-  const w=cfg.warm||0;cfg=Object.assign({},PRESETS.find(p=>p.id===c.dataset.p),{warm:w});changed=true;syncSheet();
-});
+  const id=c.dataset.p;
+  if(id.startsWith('u-')){const m=mine.find(x=>x.id===id);if(!m)return;cfg=Object.assign({},DEF,m)}
+  else{const pr=PRESETS.find(p=>p.id===id);cfg=Object.assign({},pr,{warm:cfg.warm||0,cool:cfg.cool||0,exo:pr.exo||cfg.exo||''})}
+  changed=true;fillName();syncSheet();
+}
+$('presets').addEventListener('click',pickChip);$('saved').addEventListener('click',pickChip);
 $('sound').addEventListener('change',e=>{sound=e.target.checked;save();if(sound){audio();tone(784,.12)}});
 $('tictac').addEventListener('change',e=>{tictac=e.target.checked;save();if(tictac){audio();tick(true);setTimeout(()=>tick(false),500)}});
-$('openSettings').addEventListener('click',()=>{if(st.running)pause();changed=false;syncSheet();$('sheet').hidden=false});
+$('openSettings').addEventListener('click',()=>{if(st.running)pause();changed=false;renderMine();fillName();syncSheet();$('sheet').hidden=false});
 $('closeSettings').addEventListener('click',()=>{
   $('sheet').hidden=true;save();
   if(changed){seg=build(cfg);reset()}
@@ -392,7 +463,7 @@ $('reset').addEventListener('click',reset);
 $('skip').addEventListener('click',()=>{audio();skip()});
 document.addEventListener('keydown',e=>{if(!$('sheet').hidden)return;if(e.code==='Space'){e.preventDefault();st.running?pause():start()}});
 
-buildRows();syncSheet();reset();
+buildRows();renderMine();syncSheet();reset();
 })();
 </script>
 
