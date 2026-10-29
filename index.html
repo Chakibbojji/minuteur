@@ -62,8 +62,11 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
 .where{font-weight:700;font-size:15px;letter-spacing:.12em;text-transform:uppercase;opacity:.75;min-height:1.2em}
 .bar{position:absolute;left:0;right:0;bottom:0;height:8px;background:color-mix(in srgb,var(--phase-fg) 14%,transparent)}
 .bar i{display:block;height:100%;background:var(--phase-fg);opacity:.55;width:100%;transition:width .12s linear}
-.snd-warn{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:2;white-space:nowrap;
-  background:#14161b;color:#f3f1ec;font-weight:700;font-size:15px;padding:10px 16px;border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.35)}
+.snd-warn{position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;
+  background:rgba(20,22,27,.72);color:#f3f1ec;text-align:center;padding:24px}
+.snd-warn span{font-size:64px;line-height:1}
+.snd-warn b{font-family:var(--display);font-weight:900;font-size:min(10vw,44px);text-transform:uppercase;line-height:1.05}
+.snd-warn small{font-size:15px;font-weight:600;color:#8a90a0}
 .app.paused .count{animation:blink 1.2s steps(2,start) infinite}
 @keyframes blink{to{opacity:.35}}
 
@@ -163,7 +166,7 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
   </header>
 
   <main class="field pad" aria-live="polite">
-    <button class="snd-warn" id="sndWarn" hidden>🔇 Touche l'écran pour remettre le son</button>
+    <button class="snd-warn" id="sndWarn" hidden><span>🔇</span><b>Touche l'écran<br>pour remettre le son</b><small>Le minuteur continue de tourner</small></button>
     <div class="where" id="where"></div>
     <div class="label" id="label">Prêt</div>
     <div class="count" id="count">00:00</div>
@@ -212,7 +215,8 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
       <button class="btn ghost" id="delBtn" hidden>Supprimer cette séance</button>
     </div>
     <label class="toggle"><div><b>Signaux sonores</b><span>3 bips avant chaque changement. Le mode silencieux de l'iPhone les coupe.</span></div><input type="checkbox" class="switch" id="sound" checked></label>
-    <label class="toggle"><div><b>Tic-tac pendant l'exercice</b><span>Un tic à chaque seconde pour garder le rythme.</span></div><input type="checkbox" class="switch" id="tictac" checked></label>
+    <label class="toggle" style="order:0"><div><b>Tic-tac pendant l'exercice</b><span>Un tic à chaque seconde pour garder le rythme.</span></div><input type="checkbox" class="switch" id="tictac" checked></label>
+    <p class="empty" style="text-align:center">Version du 29/10 · 20h30</p>
   </div>
 </section>
 
@@ -356,13 +360,12 @@ async function keepAwake(on){
   }catch(e){wake=null}
 }
 let wasHidden=false;
+// Après une veille, l'iPhone peut dire que le son marche alors qu'il reste muet
+// jusqu'au prochain toucher : on jette l'audio et on attend toujours un toucher.
+function markStale(){dropAudio();stale=true;audioBadSince=0;soundWatch()}
 function comeBack(){
   if(document.visibilityState!=='visible'){wasHidden=true;return}
-  if(wasHidden){ // retour de veille ou d'une autre app : on repart sur un audio neuf
-    wasHidden=false;dropAudio();newAudio();
-    stale=true; // tant qu'on n'a pas eu de toucher, on ne fait pas confiance à l'audio
-    if(ac){const p=ac.resume&&ac.resume();p&&p.then&&p.then(()=>{if(ac&&ac.state==='running'){stale=false;soundWatch()}},()=>{})}
-  }else audioRevive();
+  if(wasHidden){wasHidden=false;markStale()}else audioRevive();
   if(st.running)keepAwake(true);
   loop();
 }
@@ -370,7 +373,7 @@ document.addEventListener('visibilitychange',comeBack);
 window.addEventListener('pageshow',comeBack);
 window.addEventListener('focus',comeBack);
 // Tout toucher sur l'écran rétablit le son si l'iPhone l'avait coupé
-['pointerdown','touchend','click'].forEach(t=>document.addEventListener(t,()=>{if(sound&&(stale||!ac||ac.state!=='running'))audio()},true));
+['touchend','pointerup','click'].forEach(t=>document.addEventListener(t,()=>{if(sound&&(stale||!ac||ac.state!=='running'))audio()},true));
 let lastCare=0;
 function care(){ // contrôle toutes les secondes pendant la séance
   const now=performance.now();if(now-lastCare<1000)return;lastCare=now;
@@ -383,7 +386,7 @@ function start(){
   audio();
   if(st.done||!st.started){st.idx=0;st.started=true;st.done=false;st.endAt=performance.now()+seg[0].d*1000;cue(seg[0].type)}
   else st.endAt=performance.now()+st.left;
-  st.running=true;keepAwake(true);
+  st.running=true;lastTick=0;keepAwake(true);
   clearInterval(timer);timer=setInterval(loop,100);loop();
 }
 function pause(){
@@ -403,9 +406,12 @@ function skip(){
   if(st.running){st.endAt=performance.now()+d}else{st.left=d}
   cue(seg[st.idx].type);render(d);
 }
+let lastTick=0;
 function loop(){
   if(!st.running)return;
-  const now=performance.now();let rem=st.endAt-now,moved=false;
+  const now=performance.now();
+  if(lastTick&&now-lastTick>2500&&!stale)markStale(); // l'écran était en veille
+  lastTick=now;let rem=st.endAt-now,moved=false;
   while(rem<=0){
     if(st.idx>=seg.length-1){finish();return}
     st.idx++;st.endAt+=seg[st.idx].d*1000;rem=st.endAt-now;moved=true;
