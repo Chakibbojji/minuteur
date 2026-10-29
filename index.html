@@ -163,7 +163,7 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
   </header>
 
   <main class="field pad" aria-live="polite">
-    <button class="snd-warn" id="sndWarn" hidden>🔇 Son coupé par l'iPhone · touche ici</button>
+    <button class="snd-warn" id="sndWarn" hidden>🔇 Touche l'écran pour remettre le son</button>
     <div class="where" id="where"></div>
     <div class="label" id="label">Prêt</div>
     <div class="count" id="count">00:00</div>
@@ -271,13 +271,21 @@ function fmt(sec,pad){
 const totalOf=s=>s.reduce((a,x)=>a+x.d,0);
 
 /* ---------- son ---------- */
-let ac=null,audioBadSince=0;
+let ac=null,audioBadSince=0,stale=false;
+function dropAudio(){ // abandonne un audio que l'iPhone a pu laisser muet
+  if(ac){try{ac.onstatechange=null;ac.close()}catch(e){}}
+  ac=null;
+}
+function newAudio(){
+  try{ac=new (window.AudioContext||window.webkitAudioContext)();ac.onstatechange=soundWatch}catch(e){ac=null}
+}
 // À appeler sur un geste (toucher) : crée ou rétablit l'audio.
+// Un audio qui n'est pas actif, ou qui a traversé une mise en veille, est remplacé par un neuf :
+// sur iPhone, l'ancien peut se dire « actif » tout en restant muet.
 function audio(){
-  if(ac&&ac.state==='closed')ac=null;
-  if(!ac){
-    try{ac=new (window.AudioContext||window.webkitAudioContext)();ac.onstatechange=soundWatch}catch(e){ac=null;return}
-  }
+  if(ac&&(ac.state!=='running'||stale))dropAudio();
+  stale=false;
+  if(!ac){newAudio();if(!ac)return}
   lastGesture=performance.now();
   if(ac.state!=='running'){try{const p=ac.resume();p&&p.catch&&p.catch(()=>{})}catch(e){}}
   try{ // petit son muet : débloque l'audio sur les anciens iPhone
@@ -291,13 +299,13 @@ function audioRevive(){
 }
 // Bandeau « son coupé » si l'audio ne repart pas tout seul pendant la séance
 function soundWatch(){
-  const bad=sound&&st.running&&(!ac||ac.state!=='running');
+  const bad=sound&&st.running&&(stale||!ac||ac.state!=='running');
   if(!bad){audioBadSince=0;$('sndWarn').hidden=true;return}
   if(!audioBadSince)audioBadSince=performance.now();
-  $('sndWarn').hidden=performance.now()-audioBadSince<1500;
+  $('sndWarn').hidden=!stale&&performance.now()-audioBadSince<1500; // au retour de veille : tout de suite
 }
 // N'empile pas de sons pendant une coupure (sinon ils sortiraient tous d'un coup à la reprise)
-const canPlay=()=>ac&&(ac.state==='running'||performance.now()-lastGesture<1000);
+const canPlay=()=>ac&&!stale&&(ac.state==='running'||performance.now()-lastGesture<1000);
 let lastGesture=0;
 function tone(f,dur,when=0,vol=.35){
   if(!sound||!canPlay())return;
@@ -347,9 +355,14 @@ async function keepAwake(on){
     if(!on&&wake){await wake.release();wake=null}
   }catch(e){wake=null}
 }
+let wasHidden=false;
 function comeBack(){
-  if(document.visibilityState!=='visible')return;
-  audioRevive();
+  if(document.visibilityState!=='visible'){wasHidden=true;return}
+  if(wasHidden){ // retour de veille ou d'une autre app : on repart sur un audio neuf
+    wasHidden=false;dropAudio();newAudio();
+    stale=true; // tant qu'on n'a pas eu de toucher, on ne fait pas confiance à l'audio
+    if(ac){const p=ac.resume&&ac.resume();p&&p.then&&p.then(()=>{if(ac&&ac.state==='running'){stale=false;soundWatch()}},()=>{})}
+  }else audioRevive();
   if(st.running)keepAwake(true);
   loop();
 }
@@ -357,7 +370,7 @@ document.addEventListener('visibilitychange',comeBack);
 window.addEventListener('pageshow',comeBack);
 window.addEventListener('focus',comeBack);
 // Tout toucher sur l'écran rétablit le son si l'iPhone l'avait coupé
-['pointerdown','touchend','click'].forEach(t=>document.addEventListener(t,()=>{if(sound&&ac&&ac.state!=='running')audio()},true));
+['pointerdown','touchend','click'].forEach(t=>document.addEventListener(t,()=>{if(sound&&(stale||!ac||ac.state!=='running'))audio()},true));
 let lastCare=0;
 function care(){ // contrôle toutes les secondes pendant la séance
   const now=performance.now();if(now-lastCare<1000)return;lastCare=now;
