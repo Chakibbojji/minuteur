@@ -62,6 +62,8 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
 .where{font-weight:700;font-size:15px;letter-spacing:.12em;text-transform:uppercase;opacity:.75;min-height:1.2em}
 .bar{position:absolute;left:0;right:0;bottom:0;height:8px;background:color-mix(in srgb,var(--phase-fg) 14%,transparent)}
 .bar i{display:block;height:100%;background:var(--phase-fg);opacity:.55;width:100%;transition:width .12s linear}
+.snd-warn{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:2;white-space:nowrap;
+  background:#14161b;color:#f3f1ec;font-weight:700;font-size:15px;padding:10px 16px;border-radius:999px;box-shadow:0 4px 16px rgba(0,0,0,.35)}
 .app.paused .count{animation:blink 1.2s steps(2,start) infinite}
 @keyframes blink{to{opacity:.35}}
 
@@ -97,6 +99,13 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
 .chip{padding:9px 14px;border-radius:999px;border:1px solid var(--line);font-weight:600;font-size:15px}
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .chip.mine{border-color:var(--warm)}
+.chip.del{border-color:#ff8a8a;color:#ff8a8a}
+.chip.del.armed{background:#ff8a8a;color:#14161b}
+.group-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.group-h .group-t{margin:0}
+.org{font-weight:700;font-size:14px;color:var(--muted);padding:6px 12px;border:1px solid var(--line);border-radius:999px}
+.org.on{background:var(--ink);color:var(--ground);border-color:var(--ink)}
+#orgTip{margin-bottom:10px}
 .empty{font-size:14px;color:var(--muted);line-height:1.45;margin:0}
 .field-in{display:flex;flex-direction:column;gap:6px;padding-block:12px;border-bottom:1px solid var(--line)}
 .field-in label{font-size:17px;font-weight:700}
@@ -109,6 +118,7 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
 .btn{font-weight:700;padding:12px 18px;border-radius:12px;background:var(--ink);color:var(--ground);flex:none}
 .btn.ghost{background:none;color:var(--muted);border:1px solid var(--line);padding:9px 14px;font-size:14px;align-self:flex-start}
 .btn.ghost.danger{color:#ff8a8a;border-color:#ff8a8a}
+.btn.danger:not(.ghost){background:#ff8a8a;color:#14161b;flex:1 1 100%}
 .rows{display:flex;flex-direction:column;border-top:1px solid var(--line)}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px;border-bottom:1px solid var(--line)}
 .row .l{min-width:0}
@@ -153,6 +163,7 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
   </header>
 
   <main class="field pad" aria-live="polite">
+    <button class="snd-warn" id="sndWarn" hidden>🔇 Son coupé par l'iPhone · touche ici</button>
     <div class="where" id="where"></div>
     <div class="label" id="label">Prêt</div>
     <div class="count" id="count">00:00</div>
@@ -179,7 +190,8 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
   <div class="sheet-in">
     <div class="sheet-head"><h2>Réglages</h2><button class="ok" id="closeSettings">OK</button></div>
     <div>
-      <div class="group-t">Mes séances</div>
+      <div class="group-h"><div class="group-t">Mes séances</div><button class="org" id="orgBtn" hidden>Supprimer…</button></div>
+      <p class="empty" id="orgTip" hidden>Touche une séance pour la supprimer, puis touche encore pour confirmer.</p>
       <div class="presets" id="saved"></div>
       <p class="empty" id="savedEmpty">Aucune séance enregistrée. Règle tes phases ci-dessous, puis enregistre-les en bas de la page.</p>
     </div>
@@ -196,6 +208,7 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
     <div class="save">
       <div class="group-t" style="margin:0">Enregistrer cette séance</div>
       <div class="save-row"><input class="txt" id="saveName" type="text" maxlength="30" placeholder="Ex. Marche + gainage" autocomplete="off" autocapitalize="sentences" aria-label="Nom de la séance"><button class="btn" id="saveBtn">Enregistrer</button></div>
+      <p class="empty" id="saveHint" hidden></p>
       <button class="btn ghost" id="delBtn" hidden>Supprimer cette séance</button>
     </div>
     <label class="toggle"><div><b>Signaux sonores</b><span>3 bips avant chaque changement. Le mode silencieux de l'iPhone les coupe.</span></div><input type="checkbox" class="switch" id="sound" checked></label>
@@ -225,9 +238,9 @@ const NAMES={idle:'Prêt',warm:'Échauffement',cool:'Retour au calme',prep:'Pré
 const KEY='minuteur-series-v1';
 const $=id=>document.getElementById(id);
 
-let cfg=Object.assign({},PRESETS[0]),sound=true,tictac=true;
-try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&s.cfg){cfg=Object.assign(cfg,s.cfg);sound=s.sound!==false;tictac=s.tictac!==false}}catch(e){}
-function save(){try{localStorage.setItem(KEY,JSON.stringify({cfg,sound,tictac}))}catch(e){}}
+let cfg=Object.assign({},PRESETS[0]),sound=true,tictac=true,dirty=false;
+try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s&&s.cfg){cfg=Object.assign(cfg,s.cfg);sound=s.sound!==false;tictac=s.tictac!==false;dirty=!!s.dirty}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({cfg,sound,tictac,dirty}))}catch(e){}}
 
 /* ---------- séquence ---------- */
 function build(s){
@@ -258,20 +271,43 @@ function fmt(sec,pad){
 const totalOf=s=>s.reduce((a,x)=>a+x.d,0);
 
 /* ---------- son ---------- */
-let ac=null;
+let ac=null,audioBadSince=0;
+// À appeler sur un geste (toucher) : crée ou rétablit l'audio.
 function audio(){
-  if(!ac){try{ac=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}
-  if(ac&&ac.state==='suspended')ac.resume();
+  if(ac&&ac.state==='closed')ac=null;
+  if(!ac){
+    try{ac=new (window.AudioContext||window.webkitAudioContext)();ac.onstatechange=soundWatch}catch(e){ac=null;return}
+  }
+  lastGesture=performance.now();
+  if(ac.state!=='running'){try{const p=ac.resume();p&&p.catch&&p.catch(()=>{})}catch(e){}}
+  try{ // petit son muet : débloque l'audio sur les anciens iPhone
+    const b=ac.createBuffer(1,1,22050),s=ac.createBufferSource();s.buffer=b;s.connect(ac.destination);s.start(0);
+  }catch(e){}
+  soundWatch();
 }
+// Sans geste : l'iPhone met l'audio en pause (notification, appel, Siri, écran verrouillé…) ; on tente de le relancer.
+function audioRevive(){
+  if(ac&&ac.state!=='running'&&ac.state!=='closed'){try{const p=ac.resume();p&&p.catch&&p.catch(()=>{})}catch(e){}}
+}
+// Bandeau « son coupé » si l'audio ne repart pas tout seul pendant la séance
+function soundWatch(){
+  const bad=sound&&st.running&&(!ac||ac.state!=='running');
+  if(!bad){audioBadSince=0;$('sndWarn').hidden=true;return}
+  if(!audioBadSince)audioBadSince=performance.now();
+  $('sndWarn').hidden=performance.now()-audioBadSince<1500;
+}
+// N'empile pas de sons pendant une coupure (sinon ils sortiraient tous d'un coup à la reprise)
+const canPlay=()=>ac&&(ac.state==='running'||performance.now()-lastGesture<1000);
+let lastGesture=0;
 function tone(f,dur,when=0,vol=.35){
-  if(!sound||!ac)return;
+  if(!sound||!canPlay())return;
   const t=ac.currentTime+when,o=ac.createOscillator(),g=ac.createGain();
   o.type='square';o.frequency.value=f;
   g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(vol*.5,t+.01);g.gain.setValueAtTime(vol*.5,t+dur-.03);g.gain.linearRampToValueAtTime(0,t+dur);
   o.connect(g).connect(ac.destination);o.start(t);o.stop(t+dur+.02);
 }
 function tick(high){ // tic-tac : clic bref et sec, aigu puis grave
-  if(!sound||!tictac||!ac)return;
+  if(!sound||!tictac||!canPlay())return;
   const t=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();
   o.type='triangle';o.frequency.value=high?2100:1400;
   g.gain.setValueAtTime(.32,t);g.gain.exponentialRampToValueAtTime(.001,t+.045);
@@ -287,13 +323,47 @@ function cue(type){
 }
 
 /* ---------- veille écran ---------- */
+// Deux sécurités : le verrou d'écran du navigateur, plus une petite vidéo muette en boucle
+// (sur iPhone, le verrou seul ne marche pas toujours depuis l'icône d'accueil ni en mode économie d'énergie).
+let awakeVid=null;
+function awakeVideo(on){
+  try{
+    if(on){
+      if(!awakeVid){
+        awakeVid=document.createElement('video');
+        awakeVid.src='awake.mp4';awakeVid.muted=true;awakeVid.loop=true;awakeVid.playsInline=true;
+        awakeVid.setAttribute('playsinline','');awakeVid.setAttribute('muted','');awakeVid.setAttribute('aria-hidden','true');
+        awakeVid.style.cssText='position:fixed;width:1px;height:1px;opacity:0;pointer-events:none;left:0;top:0';
+        document.body.appendChild(awakeVid);
+      }
+      const p=awakeVid.play();p&&p.catch&&p.catch(()=>{});
+    }else if(awakeVid)awakeVid.pause();
+  }catch(e){}
+}
 async function keepAwake(on){
+  awakeVideo(on);
   try{
     if(on&&!wake&&navigator.wakeLock){wake=await navigator.wakeLock.request('screen');wake.addEventListener('release',()=>{wake=null})}
     if(!on&&wake){await wake.release();wake=null}
   }catch(e){wake=null}
 }
-document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'){if(st.running)keepAwake(true);loop()}});
+function comeBack(){
+  if(document.visibilityState!=='visible')return;
+  audioRevive();
+  if(st.running)keepAwake(true);
+  loop();
+}
+document.addEventListener('visibilitychange',comeBack);
+window.addEventListener('pageshow',comeBack);
+window.addEventListener('focus',comeBack);
+// Tout toucher sur l'écran rétablit le son si l'iPhone l'avait coupé
+['pointerdown','touchend','click'].forEach(t=>document.addEventListener(t,()=>{if(sound&&ac&&ac.state!=='running')audio()},true));
+let lastCare=0;
+function care(){ // contrôle toutes les secondes pendant la séance
+  const now=performance.now();if(now-lastCare<1000)return;lastCare=now;
+  audioRevive();soundWatch();
+  if(!wake&&navigator.wakeLock&&document.visibilityState==='visible')keepAwake(true);
+}
 
 /* ---------- moteur ---------- */
 function start(){
@@ -328,6 +398,7 @@ function loop(){
     st.idx++;st.endAt+=seg[st.idx].d*1000;rem=st.endAt-now;moved=true;
   }
   if(moved)cue(seg[st.idx].type);
+  care();
   const s=Math.ceil(rem/1000),k=st.idx+':'+s;
   if(s<=3&&s>=1&&seg[st.idx].d>3&&st.beepKey!==k){st.beepKey=k;tone(660,.1)}
   else if(seg[st.idx].type==='work'&&s>3&&s<seg[st.idx].d&&st.tickKey!==k){st.tickKey=k;tick(s%2===0)}
@@ -368,6 +439,7 @@ function render(rem){
   // bouton
   $('icoPlay').toggleAttribute('hidden',st.running||st.done);$('icoPause').toggleAttribute('hidden',!st.running);$('icoAgain').toggleAttribute('hidden',!st.done);
   $('play').setAttribute('aria-label',st.running?'Pause':st.done?'Relancer la séance':st.started?'Reprendre':'Démarrer');
+  soundWatch();
 }
 
 /* ---------- réglages ---------- */
@@ -384,31 +456,63 @@ cfg=Object.assign({},DEF,cfg);seg=build(cfg);
 function saveMine(){try{localStorage.setItem(MKEY,JSON.stringify(mine))}catch(e){}}
 const isMine=()=>String(cfg.id||'').startsWith('u-')&&mine.some(x=>x.id===cfg.id);
 function nameOf(t){return t==='work'&&cfg.exo?cfg.exo:NAMES[t]}
-function touched(){ // une séance perso garde son nom ; un modèle devient "Personnalisé"
-  if(!isMine()){cfg.id='perso';cfg.name='Personnalisé'}
-  changed=true;
+function touched(){ // une séance perso garde son nom (marquée « modifiée ») ; un modèle devient "Personnalisé"
+  if(isMine())dirty=true;else{cfg.id='perso';cfg.name='Personnalisé';dirty=false}
+  changed=true;save();saveHint();
 }
-function fillName(){$('saveName').value=isMine()?cfg.name:''}
+function fillName(){$('saveName').value=isMine()?cfg.name:'';saveHint()}
 function renderMine(){
   const box=$('saved');box.textContent='';
-  mine.forEach(m=>{const b=document.createElement('button');b.className='chip mine';b.dataset.p=m.id;b.textContent=m.name;b.setAttribute('aria-pressed','false');box.appendChild(b)});
+  if(!mine.length)org=false;
+  mine.forEach(m=>{
+    const b=document.createElement('button');b.className='chip mine'+(org?' del':'')+(org&&delId===m.id?' armed':'');b.dataset.p=m.id;
+    b.textContent=org?(delId===m.id?'Supprimer « '+m.name+' » ?':'✕ '+m.name):m.name;
+    b.setAttribute('aria-pressed','false');if(org)b.setAttribute('aria-label','Supprimer '+m.name);box.appendChild(b);
+  });
   $('savedEmpty').hidden=mine.length>0;box.hidden=mine.length===0;
+  const ob=$('orgBtn');ob.hidden=mine.length===0;ob.textContent=org?'Terminé':'Supprimer…';ob.classList.toggle('on',org);
+  $('orgTip').hidden=!org;
 }
+const sameName=(a,b)=>a.trim().toLowerCase()===b.trim().toLowerCase();
+const findByName=n=>mine.find(x=>sameName(x.name,n));
+const dataOf=()=>{const d={};Object.keys(DEF).forEach(k=>d[k]=cfg[k]);return d};
+function saveHint(){ // explique ce qui va se passer, et adapte le bouton
+  const h=$('saveHint'),n=$('saveName').value.trim(),ex=n&&findByName(n);
+  if(isMine()&&dirty){h.textContent='Séance « '+cfg.name+' » modifiée : touche OK pour garder ces réglages. Pour en faire une nouvelle séance, change le nom puis touche Enregistrer.';h.hidden=false}
+  else h.hidden=true;
+  if(!saveArm)$('saveBtn').textContent=ex&&ex.id===cfg.id?'Mettre à jour':ex?'Remplacer':'Enregistrer';
+}
+function storeAs(name){ // enregistre les réglages affichés sous ce nom
+  const m0=findByName(name);let m=m0;
+  if(m)Object.assign(m,dataOf(),{name});else{m=Object.assign({id:'u-'+Date.now()},dataOf(),{name});mine.push(m)}
+  cfg.id=m.id;cfg.name=name;dirty=false;changed=true;saveMine();save();
+}
+let saveArm=null;
+function disarmSave(){clearTimeout(saveArm);saveArm=null;$('saveBtn').classList.remove('danger');saveHint()}
+$('saveName').addEventListener('input',()=>{if(saveArm)disarmSave();saveHint()});
 $('exo').addEventListener('input',e=>{cfg.exo=e.target.value.trim();touched();$('modeName').textContent=cfg.name;$('delBtn').hidden=!isMine()});
 $('saveBtn').addEventListener('click',()=>{
-  const name=($('saveName').value.trim()||cfg.exo||'Ma séance').slice(0,30);
-  const data={};Object.keys(DEF).forEach(k=>data[k]=cfg[k]);
-  let m=mine.find(x=>x.name.toLowerCase()===name.toLowerCase());
-  if(m)Object.assign(m,data,{name});else{m=Object.assign({id:'u-'+Date.now()},data,{name});mine.push(m)}
-  cfg.id=m.id;cfg.name=name;saveMine();save();renderMine();fillName();syncSheet();
-  const b=$('saveBtn');b.textContent='Enregistrée ✓';setTimeout(()=>{b.textContent='Enregistrer'},1600);
+  const b=$('saveBtn');
+  let name=$('saveName').value.trim().slice(0,30);
+  if(!name){ // sans nom : jamais d'écrasement, on numérote
+    const base=(cfg.exo||'Ma séance').slice(0,26);name=base;let i=2;
+    while(findByName(name))name=base+' '+i++;
+  }
+  const ex=findByName(name);
+  if(ex&&ex.id!==cfg.id&&!saveArm){ // une AUTRE séance porte déjà ce nom : confirmation
+    b.classList.add('danger');b.textContent='Toucher encore pour remplacer « '+ex.name+' »';
+    saveArm=setTimeout(disarmSave,3500);return;
+  }
+  clearTimeout(saveArm);saveArm=null;b.classList.remove('danger');
+  storeAs(name);renderMine();fillName();syncSheet();
+  b.textContent='Enregistrée ✓';setTimeout(saveHint,1600);
 });
 let delArm=null;
 $('delBtn').addEventListener('click',()=>{
   const b=$('delBtn');
   if(!b.classList.contains('danger')){b.classList.add('danger');b.textContent='Toucher encore pour supprimer';clearTimeout(delArm);delArm=setTimeout(()=>{b.classList.remove('danger');b.textContent='Supprimer cette séance'},3000);return}
   clearTimeout(delArm);b.classList.remove('danger');b.textContent='Supprimer cette séance';
-  mine=mine.filter(x=>x.id!==cfg.id);saveMine();cfg.id='perso';cfg.name='Personnalisé';save();renderMine();fillName();syncSheet();
+  mine=mine.filter(x=>x.id!==cfg.id);saveMine();cfg.id='perso';cfg.name='Personnalisé';dirty=false;save();renderMine();fillName();syncSheet();
 });
 
 function buildRows(){
@@ -437,22 +541,41 @@ function stopHold(){clearTimeout(holdT);clearInterval(holdI)}
 $('rows').addEventListener('pointerdown',e=>{
   const b=e.target.closest('button[data-k]');if(!b)return;e.preventDefault();
   const k=b.dataset.k,d=+b.dataset.d;bump(k,d);
-  stopHold();holdT=setTimeout(()=>{holdI=setInterval(()=>bump(k,d),90)},420);
+  stopHold();holdT=setTimeout(()=>{holdI=setInterval(()=>bump(k,d),90)},500);
 });
 ['pointerup','pointercancel','pointerleave'].forEach(t=>$('rows').addEventListener(t,stopHold));
 $('rows').addEventListener('click',e=>{const b=e.target.closest('button[data-k]');if(b&&e.detail===0)bump(b.dataset.k,+b.dataset.d)});
+/* Supprimer des séances : mode « Supprimer… », un toucher arme, un second confirme */
+let org=false,delId=null,delT=null;
+function delMine(id){
+  mine=mine.filter(x=>x.id!==id);saveMine();
+  if(cfg.id===id){cfg.id='perso';cfg.name='Personnalisé';dirty=false;save()}
+  delId=null;renderMine();fillName();syncSheet();
+}
+$('orgBtn').addEventListener('click',()=>{org=!org;delId=null;clearTimeout(delT);renderMine();syncSheet()});
 function pickChip(e){
   const c=e.target.closest('.chip');if(!c)return;
   const id=c.dataset.p;
+  if(org&&id.startsWith('u-')){
+    clearTimeout(delT);
+    if(delId===id){delMine(id);return}
+    delId=id;renderMine();syncSheet();delT=setTimeout(()=>{delId=null;renderMine();syncSheet()},3500);return;
+  }
   if(id.startsWith('u-')){const m=mine.find(x=>x.id===id);if(!m)return;cfg=Object.assign({},DEF,m)}
   else{const pr=PRESETS.find(p=>p.id===id);cfg=Object.assign({},pr,{warm:cfg.warm||0,cool:cfg.cool||0,exo:pr.exo||cfg.exo||''})}
-  changed=true;fillName();syncSheet();
+  dirty=false;changed=true;if(saveArm)disarmSave();fillName();syncSheet();save();
 }
 $('presets').addEventListener('click',pickChip);$('saved').addEventListener('click',pickChip);
 $('sound').addEventListener('change',e=>{sound=e.target.checked;save();if(sound){audio();tone(784,.12)}});
 $('tictac').addEventListener('change',e=>{tictac=e.target.checked;save();if(tictac){audio();tick(true);setTimeout(()=>tick(false),500)}});
-$('openSettings').addEventListener('click',()=>{if(st.running)pause();changed=false;renderMine();fillName();syncSheet();$('sheet').hidden=false});
+$('openSettings').addEventListener('click',()=>{if(st.running)pause();changed=false;org=false;delId=null;renderMine();fillName();syncSheet();$('sheet').hidden=false});
 $('closeSettings').addEventListener('click',()=>{
+  if(saveArm)disarmSave();
+  // Un nom tapé mais pas enregistré : on l'enregistre (sauf s'il écraserait une autre séance)
+  const typed=$('saveName').value.trim().slice(0,30);
+  if(typed&&!(isMine()&&sameName(typed,cfg.name))){if(!findByName(typed)){storeAs(typed);renderMine()}}
+  // Séance perso modifiée : on garde les réglages affichés dans cette séance
+  else if(isMine()&&dirty){storeAs(cfg.name)}
   $('sheet').hidden=true;save();
   if(changed){seg=build(cfg);reset()}
 });
@@ -461,6 +584,7 @@ $('closeSettings').addEventListener('click',()=>{
 $('play').addEventListener('click',()=>{st.running?pause():start()});
 $('reset').addEventListener('click',reset);
 $('skip').addEventListener('click',()=>{audio();skip()});
+$('sndWarn').addEventListener('click',()=>{audio();setTimeout(soundWatch,300)});
 document.addEventListener('keydown',e=>{if(!$('sheet').hidden)return;if(e.code==='Space'){e.preventDefault();st.running?pause():start()}});
 
 buildRows();renderMine();syncSheet();reset();
