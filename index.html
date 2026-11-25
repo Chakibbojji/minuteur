@@ -103,7 +103,6 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
 .chip[aria-pressed="true"]{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .chip.mine{border-color:var(--warm)}
 .chip.del{border-color:#ff8a8a;color:#ff8a8a}
-.chip.del.armed{background:#ff8a8a;color:#14161b}
 .group-h{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
 .group-h .group-t{margin:0}
 .org{font-weight:700;font-size:14px;color:var(--muted);padding:6px 12px;border:1px solid var(--line);border-radius:999px}
@@ -122,6 +121,14 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
 .btn.ghost{background:none;color:var(--muted);border:1px solid var(--line);padding:9px 14px;font-size:14px;align-self:flex-start}
 .btn.ghost.danger{color:#ff8a8a;border-color:#ff8a8a}
 .btn.danger:not(.ghost){background:#ff8a8a;color:#14161b;flex:1 1 100%}
+/* fenêtre de confirmation */
+.ask{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.62);display:grid;place-items:center;padding:24px}
+.ask-box{width:100%;max-width:360px;box-sizing:border-box;background:var(--deck);border:1px solid var(--line);border-radius:18px;padding:22px;display:flex;flex-direction:column;gap:8px}
+.ask-box b{font-family:var(--display);font-weight:900;font-size:28px;text-transform:uppercase;line-height:1.05;overflow-wrap:anywhere}
+.ask-box p{margin:0;color:var(--muted);line-height:1.45}
+.ask-row{display:flex;gap:10px;margin-top:12px}
+.ask-row .btn{flex:1;align-self:auto;padding:13px 10px;font-size:16px}
+.btn.red{background:#ff8a8a;color:#14161b}
 .rows{display:flex;flex-direction:column;border-top:1px solid var(--line)}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-block:12px;border-bottom:1px solid var(--line)}
 .row .l{min-width:0}
@@ -194,7 +201,7 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
     <div class="sheet-head"><h2>Réglages</h2><button class="ok" id="closeSettings">OK</button></div>
     <div>
       <div class="group-h"><div class="group-t">Mes séances</div><button class="org" id="orgBtn" hidden>Supprimer…</button></div>
-      <p class="empty" id="orgTip" hidden>Touche une séance pour la supprimer, puis touche encore pour confirmer.</p>
+      <p class="empty" id="orgTip" hidden>Touche une séance pour la supprimer. Une confirmation te sera demandée.</p>
       <div class="presets" id="saved"></div>
       <p class="empty" id="savedEmpty">Aucune séance enregistrée. Règle tes phases ci-dessous, puis enregistre-les en bas de la page.</p>
     </div>
@@ -216,9 +223,17 @@ button:focus-visible{outline:2px solid var(--ink);outline-offset:3px;border-radi
     </div>
     <label class="toggle"><div><b>Signaux sonores</b><span>3 bips avant chaque changement. Le mode silencieux de l'iPhone les coupe.</span></div><input type="checkbox" class="switch" id="sound" checked></label>
     <label class="toggle" style="order:0"><div><b>Tic-tac pendant l'exercice</b><span>Un tic à chaque seconde pour garder le rythme.</span></div><input type="checkbox" class="switch" id="tictac" checked></label>
-    <p class="empty" style="text-align:center">Version du 29/10 · 20h30</p>
+    <p class="empty" style="text-align:center">Version du 25/11 · 19h00</p>
   </div>
 </section>
+
+<div class="ask" id="ask" hidden role="alertdialog" aria-modal="true" aria-labelledby="askT" aria-describedby="askD">
+  <div class="ask-box">
+    <b id="askT"></b>
+    <p id="askD">La séance sera effacée de « Mes séances ». Ce n'est pas réversible.</p>
+    <div class="ask-row"><button class="btn ghost" id="askNo">Annuler</button><button class="btn red" id="askYes">Supprimer</button></div>
+  </div>
+</div>
 
 <script>
 (function(){
@@ -484,8 +499,8 @@ function renderMine(){
   const box=$('saved');box.textContent='';
   if(!mine.length)org=false;
   mine.forEach(m=>{
-    const b=document.createElement('button');b.className='chip mine'+(org?' del':'')+(org&&delId===m.id?' armed':'');b.dataset.p=m.id;
-    b.textContent=org?(delId===m.id?'Supprimer « '+m.name+' » ?':'✕ '+m.name):m.name;
+    const b=document.createElement('button');b.className='chip mine'+(org?' del':'');b.dataset.p=m.id;
+    b.textContent=org?'✕ '+m.name:m.name;
     b.setAttribute('aria-pressed','false');if(org)b.setAttribute('aria-label','Supprimer '+m.name);box.appendChild(b);
   });
   $('savedEmpty').hidden=mine.length>0;box.hidden=mine.length===0;
@@ -526,13 +541,7 @@ $('saveBtn').addEventListener('click',()=>{
   storeAs(name);renderMine();fillName();syncSheet();
   b.textContent='Enregistrée ✓';setTimeout(saveHint,1600);
 });
-let delArm=null;
-$('delBtn').addEventListener('click',()=>{
-  const b=$('delBtn');
-  if(!b.classList.contains('danger')){b.classList.add('danger');b.textContent='Toucher encore pour supprimer';clearTimeout(delArm);delArm=setTimeout(()=>{b.classList.remove('danger');b.textContent='Supprimer cette séance'},3000);return}
-  clearTimeout(delArm);b.classList.remove('danger');b.textContent='Supprimer cette séance';
-  mine=mine.filter(x=>x.id!==cfg.id);saveMine();cfg.id='perso';cfg.name='Personnalisé';dirty=false;save();renderMine();fillName();syncSheet();
-});
+$('delBtn').addEventListener('click',()=>{if(isMine())askDel(cfg.id)});
 
 function buildRows(){
   $('rows').innerHTML=FIELDS.map(f=>`
@@ -564,22 +573,32 @@ $('rows').addEventListener('pointerdown',e=>{
 });
 ['pointerup','pointercancel','pointerleave'].forEach(t=>$('rows').addEventListener(t,stopHold));
 $('rows').addEventListener('click',e=>{const b=e.target.closest('button[data-k]');if(b&&e.detail===0)bump(b.dataset.k,+b.dataset.d)});
-/* Supprimer des séances : mode « Supprimer… », un toucher arme, un second confirme */
-let org=false,delId=null,delT=null;
+/* Supprimer des séances : mode « Supprimer… » ou bouton « Supprimer cette séance », puis fenêtre de confirmation */
+let org=false,askId=null,askFrom=null;
 function delMine(id){
   mine=mine.filter(x=>x.id!==id);saveMine();
   if(cfg.id===id){cfg.id='perso';cfg.name='Personnalisé';dirty=false;save()}
-  delId=null;renderMine();fillName();syncSheet();
+  renderMine();fillName();syncSheet();
 }
-$('orgBtn').addEventListener('click',()=>{org=!org;delId=null;clearTimeout(delT);renderMine();syncSheet()});
+function askDel(id){
+  const m=mine.find(x=>x.id===id);if(!m)return;
+  askId=id;askFrom=document.activeElement;
+  $('askT').textContent='Supprimer « '+m.name+' » ?';
+  $('ask').hidden=false;$('askNo').focus();
+}
+function closeAsk(){
+  $('ask').hidden=true;askId=null;
+  if(askFrom&&document.contains(askFrom))askFrom.focus();askFrom=null;
+}
+$('askNo').addEventListener('click',closeAsk);
+$('askYes').addEventListener('click',()=>{const id=askId;closeAsk();if(id)delMine(id)});
+$('ask').addEventListener('click',e=>{if(e.target===$('ask'))closeAsk()}); // toucher à côté = annuler
+document.addEventListener('keydown',e=>{if(!$('ask').hidden&&e.key==='Escape'){e.preventDefault();closeAsk()}});
+$('orgBtn').addEventListener('click',()=>{org=!org;renderMine();syncSheet()});
 function pickChip(e){
   const c=e.target.closest('.chip');if(!c)return;
   const id=c.dataset.p;
-  if(org&&id.startsWith('u-')){
-    clearTimeout(delT);
-    if(delId===id){delMine(id);return}
-    delId=id;renderMine();syncSheet();delT=setTimeout(()=>{delId=null;renderMine();syncSheet()},3500);return;
-  }
+  if(org&&id.startsWith('u-')){askDel(id);return}
   if(id.startsWith('u-')){const m=mine.find(x=>x.id===id);if(!m)return;cfg=Object.assign({},DEF,m)}
   else{const pr=PRESETS.find(p=>p.id===id);cfg=Object.assign({},pr,{warm:cfg.warm||0,cool:cfg.cool||0,exo:pr.exo||cfg.exo||''})}
   dirty=false;changed=true;if(saveArm)disarmSave();fillName();syncSheet();save();
@@ -587,8 +606,9 @@ function pickChip(e){
 $('presets').addEventListener('click',pickChip);$('saved').addEventListener('click',pickChip);
 $('sound').addEventListener('change',e=>{sound=e.target.checked;save();if(sound){audio();tone(784,.12)}});
 $('tictac').addEventListener('change',e=>{tictac=e.target.checked;save();if(tictac){audio();tick(true);setTimeout(()=>tick(false),500)}});
-$('openSettings').addEventListener('click',()=>{if(st.running)pause();changed=false;org=false;delId=null;renderMine();fillName();syncSheet();$('sheet').hidden=false});
+$('openSettings').addEventListener('click',()=>{if(st.running)pause();changed=false;org=false;renderMine();fillName();syncSheet();$('sheet').hidden=false});
 $('closeSettings').addEventListener('click',()=>{
+  if(!$('ask').hidden)closeAsk();
   if(saveArm)disarmSave();
   // Un nom tapé mais pas enregistré : on l'enregistre (sauf s'il écraserait une autre séance)
   const typed=$('saveName').value.trim().slice(0,30);
