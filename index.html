@@ -574,24 +574,30 @@ $('rows').addEventListener('pointerdown',e=>{
 ['pointerup','pointercancel','pointerleave'].forEach(t=>$('rows').addEventListener(t,stopHold));
 $('rows').addEventListener('click',e=>{const b=e.target.closest('button[data-k]');if(b&&e.detail===0)bump(b.dataset.k,+b.dataset.d)});
 /* Supprimer des séances : mode « Supprimer… » ou bouton « Supprimer cette séance », puis fenêtre de confirmation */
-let org=false,askId=null,askFrom=null;
+let org=false,askId=null,askFrom=null,askAt=0;
 function delMine(id){
   mine=mine.filter(x=>x.id!==id);saveMine();
   if(cfg.id===id){cfg.id='perso';cfg.name='Personnalisé';dirty=false;save()}
   renderMine();fillName();syncSheet();
 }
+const behind=on=>[...document.body.children].forEach(el=>{if(el.id!=='ask')el.inert=on});
 function askDel(id){
   const m=mine.find(x=>x.id===id);if(!m)return;
-  askId=id;askFrom=document.activeElement;
+  askId=id;askFrom=document.activeElement;askAt=Date.now();
   $('askT').textContent='Supprimer « '+m.name+' » ?';
+  behind(true); // la page derrière ne réagit plus tant que la fenêtre est ouverte
   $('ask').hidden=false;$('askNo').focus();
 }
-function closeAsk(){
-  $('ask').hidden=true;askId=null;
-  if(askFrom&&document.contains(askFrom))askFrom.focus();askFrom=null;
+function closeAsk(back=true){
+  $('ask').hidden=true;behind(false);askId=null;
+  if(back&&askFrom&&document.contains(askFrom))askFrom.focus();askFrom=null;
 }
-$('askNo').addEventListener('click',closeAsk);
-$('askYes').addEventListener('click',()=>{const id=askId;closeAsk();if(id)delMine(id)});
+$('askNo').addEventListener('click',()=>closeAsk());
+$('askYes').addEventListener('click',()=>{
+  if(Date.now()-askAt<400)return; // un double toucher réflexe ne confirme pas
+  const id=askId;closeAsk(false);if(!id)return;
+  delMine(id);($('orgBtn').hidden?$('closeSettings'):$('orgBtn')).focus(); // le bouton d'origine a pu disparaître
+});
 $('ask').addEventListener('click',e=>{if(e.target===$('ask'))closeAsk()}); // toucher à côté = annuler
 document.addEventListener('keydown',e=>{if(!$('ask').hidden&&e.key==='Escape'){e.preventDefault();closeAsk()}});
 $('orgBtn').addEventListener('click',()=>{org=!org;renderMine();syncSheet()});
